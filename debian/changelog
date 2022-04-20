@@ -1,3 +1,9 @@
+setuptools (52.0.0-4pexip1) pexip; urgency=medium
+
+  * Don't build docs
+
+ -- Huw Jones <huw@pexip.com>  Wed, 20 Apr 2022 15:50:56 +0000
+
 setuptools (52.0.0-4) unstable; urgency=medium
 
   * Don't include the exe installer files in the binary package, not
