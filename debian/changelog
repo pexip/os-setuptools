@@ -1,3 +1,9 @@
+setuptools (52.0.0-4pexip2) pexip-bullseye; urgency=medium
+
+  * Rebuild for bullseye.
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Wed, 20 Jul 2022 17:09:46 +0100
+
 setuptools (52.0.0-4pexip1) pexip; urgency=medium
 
   * Don't build docs
