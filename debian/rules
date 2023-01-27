@@ -10,9 +10,9 @@ override_dh_auto_install:
 
 	PYTHONPATH=$(CURDIR) $(MAKE) -C docs html
 
-#	mkdir -p debian/python-setuptools-whl/usr/share/python-wheels
-#	python3 setup.py bdist_wheel --universal \
-#	        -d debian/python-setuptools-whl/usr/share/python-wheels
+	mkdir -p debian/python3-setuptools-whl/usr/share/python-wheels
+	python3 setup.py bdist_wheel \
+	        -d debian/python3-setuptools-whl/usr/share/python-wheels
 
 	# dh_pypy from dh-python < 1.20150705-1 falls over requires.txt
 	# and our requires.txt aren't useful

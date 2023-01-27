@@ -8,9 +8,11 @@ Build-Depends:
  python3-all,
  python3-alabaster,
  python3-sphinx,
+ python3-sphinx-reredirects,
+ python3-sphinx-notfound-page,
  python3-wheel
 Build-Conflicts: python-setuptools, python3-setuptools, pypy-setuptools
-Standards-Version: 4.5.1
+Standards-Version: 4.6.2
 Homepage: https://pypi.python.org/pypi/setuptools
 
 Package: python-setuptools-doc
@@ -48,6 +50,17 @@ Suggests: python-setuptools-doc
 Description: Python3 Distutils Enhancements
  Extensions to the python-distutils for large or complex distributions.
 
+Package: python3-setuptools-whl
+Architecture: all
+Depends: ${misc:Depends}
+Breaks: python-pip-whl (<< 21.3.1+dfsg-2~)
+Replaces: python-pip-whl (<< 21.3.1+dfsg-2~)
+Description: Python Distutils Enhancements (wheel package)
+ Extensions to the python-distutils for large or complex distributions.
+ .
+ This is the support package for the PEP 427 wheel version of the package,
+ required for using setuptools inside a virtual environment.
+
 #Package: pypy-pkg-resources
 #Suggests: pypy-setuptools
 #Architecture: all
@@ -72,11 +85,3 @@ Description: Python3 Distutils Enhancements
 #Suggests: python-setuptools-doc
 #Description: PyPy Distutils Enhancements
 # Extensions to the python-distutils for large or complex distributions.
-
-#Package: python-setuptools-whl
-#Architecture: all
-#Depends: ${misc:Depends}
-#Description: Python Distutils Enhancements (wheel package)
-# Extensions to the python-distutils for large or complex distributions.
-# .
-# This package provides setuptools in PEP 427 wheel format.

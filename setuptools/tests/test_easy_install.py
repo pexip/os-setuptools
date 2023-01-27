@@ -12,12 +12,17 @@ import itertools
 import distutils.errors
 import io
 import zipfile
-import mock
 import time
 import re
 import subprocess
+import pathlib
+import warnings
+from collections import namedtuple
+from pathlib import Path
+from unittest import mock
 
 import pytest
+from jaraco import path
 
 from setuptools import sandbox
 from setuptools.sandbox import run_setup
@@ -34,7 +39,6 @@ from setuptools.tests import fail_on_ascii
 import pkg_resources
 
 from . import contexts
-from .files import build_files
 from .textwrap import DALS
 
 
@@ -61,7 +65,7 @@ class FakeDist:
 SETUP_PY = DALS("""
     from setuptools import setup
 
-    setup(name='foo')
+    setup()
     """)
 
 
@@ -445,6 +449,68 @@ class TestDistutilsPackage:
         run_setup('setup.py', ['bdist_egg'])
 
 
+class TestInstallRequires:
+    def test_setup_install_includes_dependencies(self, tmp_path, mock_index):
+        """
+        When ``python setup.py install`` is called directly, it will use easy_install
+        to fetch dependencies.
+        """
+        # TODO: Remove these tests once `setup.py install` is completely removed
+        project_root = tmp_path / "project"
+        project_root.mkdir(exist_ok=True)
+        install_root = tmp_path / "install"
+        install_root.mkdir(exist_ok=True)
+
+        self.create_project(project_root)
+        cmd = [
+            sys.executable,
+            '-c', '__import__("setuptools").setup()',
+            'install',
+            '--install-base', str(install_root),
+            '--install-lib', str(install_root),
+            '--install-headers', str(install_root),
+            '--install-scripts', str(install_root),
+            '--install-data', str(install_root),
+            '--install-purelib', str(install_root),
+            '--install-platlib', str(install_root),
+        ]
+        env = {**os.environ, "__EASYINSTALL_INDEX": mock_index.url}
+        cp = subprocess.run(
+            cmd,
+            cwd=str(project_root),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        assert cp.returncode != 0
+        try:
+            assert '/does-not-exist/' in {r.path for r in mock_index.requests}
+            assert next(
+                line
+                for line in cp.stdout.splitlines()
+                if "not find suitable distribution for" in line
+                and "does-not-exist" in line
+            )
+        except Exception:
+            if "failed to get random numbers" in cp.stdout:
+                pytest.xfail(f"{sys.platform} failure - {cp.stdout}")
+            raise
+
+    def create_project(self, root):
+        config = """
+        [metadata]
+        name = project
+        version = 42
+
+        [options]
+        install_requires = does-not-exist
+        py_modules = mod
+        """
+        (root / 'setup.cfg').write_text(DALS(config), encoding="utf-8")
+        (root / 'mod.py').touch()
+
+
 class TestSetupRequires:
 
     def test_setup_requires_honors_fetch_params(self, mock_index, monkeypatch):
@@ -463,7 +529,7 @@ class TestSetupRequires:
                     with contexts.environment(PYTHONPATH=temp_install_dir):
                         cmd = [
                             sys.executable,
-                            '-m', 'setup',
+                            '-c', '__import__("setuptools").setup()',
                             'easy_install',
                             '--index-url', mock_index.url,
                             '--exclude-scripts',
@@ -659,7 +725,7 @@ class TestSetupRequires:
                 dep_url = path_to_url(dep_sdist, authority='localhost')
                 test_pkg = create_setup_requires_package(
                     temp_dir,
-                    # Ignored (overriden by setup_attrs)
+                    # Ignored (overridden by setup_attrs)
                     'python-xlib', '0.19',
                     setup_attrs=dict(
                         setup_requires='dependency @ %s' % dep_url))
@@ -669,26 +735,24 @@ class TestSetupRequires:
 
     def test_setup_requires_with_allow_hosts(self, mock_index):
         ''' The `allow-hosts` option in not supported anymore. '''
+        files = {
+            'test_pkg': {
+                'setup.py': DALS('''
+                    from setuptools import setup
+                    setup(setup_requires='python-xlib')
+                    '''),
+                'setup.cfg': DALS('''
+                    [easy_install]
+                    allow_hosts = *
+                    '''),
+            }
+        }
         with contexts.save_pkg_resources_state():
             with contexts.tempdir() as temp_dir:
-                test_pkg = os.path.join(temp_dir, 'test_pkg')
-                test_setup_py = os.path.join(test_pkg, 'setup.py')
-                test_setup_cfg = os.path.join(test_pkg, 'setup.cfg')
-                os.mkdir(test_pkg)
-                with open(test_setup_py, 'w') as fp:
-                    fp.write(DALS(
-                        '''
-                        from setuptools import setup
-                        setup(setup_requires='python-xlib')
-                        '''))
-                with open(test_setup_cfg, 'w') as fp:
-                    fp.write(DALS(
-                        '''
-                        [easy_install]
-                        allow_hosts = *
-                        '''))
+                path.build(files, prefix=temp_dir)
+                setup_py = str(pathlib.Path(temp_dir, 'test_pkg', 'setup.py'))
                 with pytest.raises(distutils.errors.DistutilsError):
-                    run_setup(test_setup_py, [str('--version')])
+                    run_setup(setup_py, [str('--version')])
         assert len(mock_index.requests) == 0
 
     def test_setup_requires_with_python_requires(self, monkeypatch, tmpdir):
@@ -731,7 +795,7 @@ class TestSetupRequires:
         with contexts.save_pkg_resources_state():
             test_pkg = create_setup_requires_package(
                 str(tmpdir),
-                'python-xlib', '0.19',  # Ignored (overriden by setup_attrs).
+                'python-xlib', '0.19',  # Ignored (overridden by setup_attrs).
                 setup_attrs=dict(
                     setup_requires='dep', dependency_links=[index_url]))
             test_setup_py = os.path.join(test_pkg, 'setup.py')
@@ -782,9 +846,11 @@ class TestSetupRequires:
 
     def test_setup_requires_with_transitive_extra_dependency(
             self, monkeypatch):
-        # Use case: installing a package with a build dependency on
-        # an already installed `dep[extra]`, which in turn depends
-        # on `extra_dep` (whose is not already installed).
+        '''
+        Use case: installing a package with a build dependency on
+        an already installed `dep[extra]`, which in turn depends
+        on `extra_dep` (whose is not already installed).
+        '''
         with contexts.save_pkg_resources_state():
             with contexts.tempdir() as temp_dir:
                 # Create source distribution for `extra_dep`.
@@ -794,7 +860,7 @@ class TestSetupRequires:
                 # Create source tree for `dep`.
                 dep_pkg = os.path.join(temp_dir, 'dep')
                 os.mkdir(dep_pkg)
-                build_files({
+                path.build({
                     'setup.py':
                     DALS("""
                           import setuptools
@@ -825,6 +891,75 @@ class TestSetupRequires:
                 monkeypatch.setenv(str('PIP_RETRIES'), str('0'))
                 monkeypatch.setenv(str('PIP_TIMEOUT'), str('0'))
                 run_setup(test_setup_py, [str('--version')])
+
+    def test_setup_requires_with_distutils_command_dep(self, monkeypatch):
+        '''
+        Use case: ensure build requirements' extras
+        are properly installed and activated.
+        '''
+        with contexts.save_pkg_resources_state():
+            with contexts.tempdir() as temp_dir:
+                # Create source distribution for `extra_dep`.
+                make_sdist(os.path.join(temp_dir, 'extra_dep-1.0.tar.gz'), [
+                    ('setup.py',
+                     DALS("""
+                          import setuptools
+                          setuptools.setup(
+                              name='extra_dep',
+                              version='1.0',
+                              py_modules=['extra_dep'],
+                          )
+                          """)),
+                    ('setup.cfg', ''),
+                    ('extra_dep.py', ''),
+                ])
+                # Create source tree for `epdep`.
+                dep_pkg = os.path.join(temp_dir, 'epdep')
+                os.mkdir(dep_pkg)
+                path.build({
+                    'setup.py':
+                    DALS("""
+                          import setuptools
+                          setuptools.setup(
+                              name='dep', version='2.0',
+                              py_modules=['epcmd'],
+                              extras_require={'extra': ['extra_dep']},
+                              entry_points='''
+                                           [distutils.commands]
+                                           epcmd = epcmd:epcmd [extra]
+                                           ''',
+                          )
+                         """),
+                    'setup.cfg': '',
+                    'epcmd.py': DALS("""
+                                     from distutils.command.build_py import build_py
+
+                                     import extra_dep
+
+                                     class epcmd(build_py):
+                                         pass
+                                     """),
+                }, prefix=dep_pkg)
+                # "Install" dep.
+                run_setup(
+                    os.path.join(dep_pkg, 'setup.py'), [str('dist_info')])
+                working_set.add_entry(dep_pkg)
+                # Create source tree for test package.
+                test_pkg = os.path.join(temp_dir, 'test_pkg')
+                test_setup_py = os.path.join(test_pkg, 'setup.py')
+                os.mkdir(test_pkg)
+                with open(test_setup_py, 'w') as fp:
+                    fp.write(DALS(
+                        '''
+                        from setuptools import installer, setup
+                        setup(setup_requires='dep[extra]')
+                        '''))
+                # Check...
+                monkeypatch.setenv(str('PIP_FIND_LINKS'), str(temp_dir))
+                monkeypatch.setenv(str('PIP_NO_INDEX'), str('1'))
+                monkeypatch.setenv(str('PIP_RETRIES'), str('0'))
+                monkeypatch.setenv(str('PIP_TIMEOUT'), str('0'))
+                run_setup(test_setup_py, ['epcmd'])
 
 
 def make_trivial_sdist(dist_path, distname, version):
@@ -1059,3 +1194,101 @@ class TestWindowsScriptWriter:
         hdr = hdr.rstrip('\n')
         # header should not start with an escaped quote
         assert not hdr.startswith('\\"')
+
+
+VersionStub = namedtuple("VersionStub", "major, minor, micro, releaselevel, serial")
+
+
+def test_use_correct_python_version_string(tmpdir, tmpdir_cwd, monkeypatch):
+    # In issue #3001, easy_install wrongly uses the `python3.1` directory
+    # when the interpreter is `python3.10` and the `--user` option is given.
+    # See pypa/setuptools#3001.
+    dist = Distribution()
+    cmd = dist.get_command_obj('easy_install')
+    cmd.args = ['ok']
+    cmd.optimize = 0
+    cmd.user = True
+    cmd.install_userbase = str(tmpdir)
+    cmd.install_usersite = None
+    install_cmd = dist.get_command_obj('install')
+    install_cmd.install_userbase = str(tmpdir)
+    install_cmd.install_usersite = None
+
+    with monkeypatch.context() as patch, warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        version = '3.10.1 (main, Dec 21 2021, 09:17:12) [GCC 10.2.1 20210110]'
+        info = VersionStub(3, 10, 1, "final", 0)
+        patch.setattr('site.ENABLE_USER_SITE', True)
+        patch.setattr('sys.version', version)
+        patch.setattr('sys.version_info', info)
+        patch.setattr(cmd, 'create_home_path', mock.Mock())
+        cmd.finalize_options()
+
+    name = "pypy" if hasattr(sys, 'pypy_version_info') else "python"
+    install_dir = cmd.install_dir.lower()
+
+    # In some platforms (e.g. Windows), install_dir is mostly determined
+    # via `sysconfig`, which define constants eagerly at module creation.
+    # This means that monkeypatching `sys.version` to emulate 3.10 for testing
+    # may have no effect.
+    # The safest test here is to rely on the fact that 3.1 is no longer
+    # supported/tested, and make sure that if 'python3.1' ever appears in the string
+    # it is followed by another digit (e.g. 'python3.10').
+    if re.search(name + r'3\.?1', install_dir):
+        assert re.search(name + r'3\.?1\d', install_dir)
+
+    # The following "variables" are used for interpolation in distutils
+    # installation schemes, so it should be fair to treat them as "semi-public",
+    # or at least public enough so we can have a test to make sure they are correct
+    assert cmd.config_vars['py_version'] == '3.10.1'
+    assert cmd.config_vars['py_version_short'] == '3.10'
+    assert cmd.config_vars['py_version_nodot'] == '310'
+
+
+def test_editable_user_and_build_isolation(setup_context, monkeypatch, tmp_path):
+    ''' `setup.py develop` should honor `--user` even under build isolation'''
+
+    # == Arrange ==
+    # Pretend that build isolation was enabled
+    # e.g pip sets the environment variable PYTHONNOUSERSITE=1
+    monkeypatch.setattr('site.ENABLE_USER_SITE', False)
+
+    # Patching $HOME for 2 reasons:
+    # 1. setuptools/command/easy_install.py:create_home_path
+    #    tries creating directories in $HOME
+    # given `self.config_vars['DESTDIRS'] = "/home/user/.pyenv/versions/3.9.10 /home/user/.pyenv/versions/3.9.10/lib /home/user/.pyenv/versions/3.9.10/lib/python3.9 /home/user/.pyenv/versions/3.9.10/lib/python3.9/lib-dynload"``  # noqa: E501
+    # it will `makedirs("/home/user/.pyenv/versions/3.9.10 /home/user/.pyenv/versions/3.9.10/lib /home/user/.pyenv/versions/3.9.10/lib/python3.9 /home/user/.pyenv/versions/3.9.10/lib/python3.9/lib-dynload")``  # noqa: E501
+    # 2. We are going to force `site` to update site.USER_BASE and site.USER_SITE
+    #    To point inside our new home
+    monkeypatch.setenv('HOME', str(tmp_path / '.home'))
+    monkeypatch.setenv('USERPROFILE', str(tmp_path / '.home'))
+    monkeypatch.setenv('APPDATA', str(tmp_path / '.home'))
+    monkeypatch.setattr('site.USER_BASE', None)
+    monkeypatch.setattr('site.USER_SITE', None)
+    user_site = Path(site.getusersitepackages())
+    user_site.mkdir(parents=True, exist_ok=True)
+
+    sys_prefix = (tmp_path / '.sys_prefix')
+    sys_prefix.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr('sys.prefix', str(sys_prefix))
+
+    setup_script = (
+        "__import__('setuptools').setup(name='aproj', version=42, packages=[])\n"
+    )
+    (tmp_path / "setup.py").write_text(setup_script, encoding="utf-8")
+
+    # == Sanity check ==
+    assert list(sys_prefix.glob("*")) == []
+    assert list(user_site.glob("*")) == []
+
+    # == Act ==
+    run_setup('setup.py', ['develop', '--user'])
+
+    # == Assert ==
+    # Should not install to sys.prefix
+    assert list(sys_prefix.glob("*")) == []
+    # Should install to user site
+    installed = {f.name for f in user_site.glob("*")}
+    # sometimes easy-install.pth is created and sometimes not
+    installed = installed - {"easy-install.pth"}
+    assert installed == {'aproj.egg-link'}
