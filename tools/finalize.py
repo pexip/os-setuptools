@@ -42,10 +42,23 @@ def update_changelog():
     cmd = [
         sys.executable, '-m',
         'towncrier',
+        'build',
         '--version', get_version(),
         '--yes',
     ]
     subprocess.check_call(cmd)
+    _repair_changelog()
+
+
+def _repair_changelog():
+    """
+    Workaround for #2666
+    """
+    changelog_fn = pathlib.Path('CHANGES.rst')
+    changelog = changelog_fn.read_text()
+    fixed = re.sub(r'^(v[0-9.]+)v[0-9.]+$', r'\1', changelog, flags=re.M)
+    changelog_fn.write_text(fixed)
+    subprocess.check_output(['git', 'add', changelog_fn])
 
 
 def bump_version():
@@ -67,11 +80,18 @@ def check_changes():
     """
     allowed = 'deprecation', 'breaking', 'change', 'doc', 'misc'
     except_ = 'README.rst', '.gitignore'
-    assert all(
-        any(key in file.name for key in allowed)
+    news_fragments = (
+        file
         for file in pathlib.Path('changelog.d').iterdir()
         if file.name not in except_
     )
+    unrecognized = [
+        str(file)
+        for file in news_fragments
+        if not any(f".{key}" in file.suffixes for key in allowed)
+    ]
+    if unrecognized:
+        raise ValueError(f"Some news fragments have invalid names: {unrecognized}")
 
 
 if __name__ == '__main__':

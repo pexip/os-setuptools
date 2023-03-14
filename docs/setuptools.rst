@@ -21,8 +21,9 @@ Feature Highlights:
   individually in setup.py
 
 * Automatically include all relevant files in your source distributions,
-  without needing to create a ``MANIFEST.in`` file, and without having to force
-  regeneration of the ``MANIFEST`` file when your source tree changes.
+  without needing to create a |MANIFEST.in|_ file, and without having to force
+  regeneration of the ``MANIFEST`` file when your source tree changes
+  [#manifest]_.
 
 * Automatically generate wrapper scripts or Windows (console and GUI) .exe
   files for any number of "main" functions in your project.  (Note: this is not
@@ -47,14 +48,11 @@ Feature Highlights:
 * Full support for PEP 420 via ``find_namespace_packages()``, which is also backwards
   compatible to the existing ``find_packages()`` for Python >= 3.3.
 
-.. contents:: **Table of Contents**
-
-
 -----------------
 Developer's Guide
 -----------------
 
-
+The developer's guide has been updated. See the :doc:`most recent version <userguide/index>`.
 
 
 
@@ -135,7 +133,7 @@ only a ``setuptools.setup()`` call.
 .. note::
 
     :pep:`517` doesn't support editable installs so this is currently
-    incompatible with ``pip install -e .``, as :pep:`517` does not support editable installs.
+    incompatible with ``pip install -e .``.
 
 This means that you can have a Python project with all build configuration
 specified in ``setup.cfg``, without a ``setup.py`` file, if you **can rely
@@ -153,7 +151,6 @@ To use this feature:
       [build-system]
       requires = [
         "setuptools >= 40.9.0",
-        "wheel",
       ]
       build-backend = "setuptools.build_meta"
 
@@ -204,13 +201,27 @@ As a consequence, the resulting dictionary will include no such options.
 
 
 
-Mailing List and Bug Tracker
-============================
+Forum and Bug Tracker
+=====================
 
-Please use the `distutils-sig mailing list`_ for questions and discussion about
+Please use `GitHub Discussions`_ for questions and discussion about
 setuptools, and the `setuptools bug tracker`_ ONLY for issues you have
-confirmed via the list are actual bugs, and which you have reduced to a minimal
+confirmed via the forum are actual bugs, and which you have reduced to a minimal
 set of steps to reproduce.
 
-.. _distutils-sig mailing list: http://mail.python.org/pipermail/distutils-sig/
+.. _GitHub Discussions: https://github.com/pypa/setuptools/discussions
 .. _setuptools bug tracker: https://github.com/pypa/setuptools/
+
+
+----
+
+
+.. [#manifest] The default behaviour for ``setuptools`` will work well for pure
+   Python packages, or packages with simple C extensions (that don't require
+   any special C header). See :ref:`Controlling files in the distribution` and
+   :doc:`userguide/datafiles` for more information about complex scenarios, if
+   you want to include other types of files.
+
+
+.. |MANIFEST.in| replace:: ``MANIFEST.in``
+.. _MANIFEST.in: https://packaging.python.org/en/latest/guides/using-manifest-in/

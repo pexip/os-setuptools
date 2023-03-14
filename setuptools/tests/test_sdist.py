@@ -6,10 +6,13 @@ import tempfile
 import unicodedata
 import contextlib
 import io
+from unittest import mock
 
 import pytest
 
-import pkg_resources
+from setuptools import Command
+from setuptools._importlib import metadata
+from setuptools import SetuptoolsDeprecationWarning
 from setuptools.command.sdist import sdist
 from setuptools.command.egg_info import manifest_maker
 from setuptools.dist import Distribution
@@ -25,11 +28,14 @@ SETUP_ATTRS = {
     'data_files': [("data", [os.path.join("d", "e.dat")])],
 }
 
-SETUP_PY = """\
+SETUP_PY = (
+    """\
 from setuptools import setup
 
 setup(**%r)
-""" % SETUP_ATTRS
+"""
+    % SETUP_ATTRS
+)
 
 
 @contextlib.contextmanager
@@ -83,6 +89,12 @@ fail_on_latin1_encoded_filenames = pytest.mark.xfail(
 )
 
 
+skip_under_xdist = pytest.mark.skipif(
+    "os.environ.get('PYTEST_XDIST_WORKER')",
+    reason="pytest-dev/pytest-xdist#843",
+)
+
+
 def touch(path):
     path.write_text('', encoding='utf-8')
 
@@ -106,6 +118,13 @@ class TestSdistTest:
         with tmpdir.as_cwd():
             yield
 
+    def assert_package_data_in_manifest(self, cmd):
+        manifest = cmd.filelist.files
+        assert os.path.join('sdist_test', 'a.txt') in manifest
+        assert os.path.join('sdist_test', 'b.txt') in manifest
+        assert os.path.join('sdist_test', 'c.rst') not in manifest
+        assert os.path.join('d', 'e.dat') in manifest
+
     def test_package_data_in_sdist(self):
         """Regression test for pull request #4: ensures that files listed in
         package_data are included in the manifest even if they're not added to
@@ -120,11 +139,63 @@ class TestSdistTest:
         with quiet():
             cmd.run()
 
-        manifest = cmd.filelist.files
-        assert os.path.join('sdist_test', 'a.txt') in manifest
-        assert os.path.join('sdist_test', 'b.txt') in manifest
-        assert os.path.join('sdist_test', 'c.rst') not in manifest
-        assert os.path.join('d', 'e.dat') in manifest
+        self.assert_package_data_in_manifest(cmd)
+
+    def test_package_data_and_include_package_data_in_sdist(self):
+        """
+        Ensure package_data and include_package_data work
+        together.
+        """
+        setup_attrs = {**SETUP_ATTRS, 'include_package_data': True}
+        assert setup_attrs['package_data']
+
+        dist = Distribution(setup_attrs)
+        dist.script_name = 'setup.py'
+        cmd = sdist(dist)
+        cmd.ensure_finalized()
+
+        with quiet():
+            cmd.run()
+
+        self.assert_package_data_in_manifest(cmd)
+
+    def test_custom_build_py(self):
+        """
+        Ensure projects defining custom build_py don't break
+        when creating sdists (issue #2849)
+        """
+        from distutils.command.build_py import build_py as OrigBuildPy
+
+        using_custom_command_guard = mock.Mock()
+
+        class CustomBuildPy(OrigBuildPy):
+            """
+            Some projects have custom commands inheriting from `distutils`
+            """
+
+            def get_data_files(self):
+                using_custom_command_guard()
+                return super().get_data_files()
+
+        setup_attrs = {**SETUP_ATTRS, 'include_package_data': True}
+        assert setup_attrs['package_data']
+
+        dist = Distribution(setup_attrs)
+        dist.script_name = 'setup.py'
+        cmd = sdist(dist)
+        cmd.ensure_finalized()
+
+        # Make sure we use the custom command
+        cmd.cmdclass = {'build_py': CustomBuildPy}
+        cmd.distribution.cmdclass = {'build_py': CustomBuildPy}
+        assert cmd.distribution.get_command_class('build_py') == CustomBuildPy
+
+        msg = "setuptools instead of distutils"
+        with quiet(), pytest.warns(SetuptoolsDeprecationWarning, match=msg):
+            cmd.run()
+
+        using_custom_command_guard.assert_called()
+        self.assert_package_data_in_manifest(cmd)
 
     def test_setup_py_exists(self):
         dist = Distribution(SETUP_ATTRS)
@@ -257,6 +328,7 @@ class TestSdistTest:
         # The filelist should have been updated as well
         assert u_filename in mm.filelist.files
 
+    @skip_under_xdist
     def test_write_manifest_skips_non_utf8_filenames(self):
         """
         Files that cannot be encoded to UTF-8 (specifically, those that
@@ -389,13 +461,13 @@ class TestSdistTest:
     @classmethod
     def make_strings(cls, item):
         if isinstance(item, dict):
-            return {
-                key: cls.make_strings(value) for key, value in item.items()}
+            return {key: cls.make_strings(value) for key, value in item.items()}
         if isinstance(item, list):
             return list(map(cls.make_strings, item))
         return str(item)
 
     @fail_on_latin1_encoded_filenames
+    @skip_under_xdist
     def test_sdist_with_latin1_encoded_filename(self):
         # Test for #303.
         dist = Distribution(self.make_strings(SETUP_ATTRS))
@@ -425,6 +497,63 @@ class TestSdistTest:
             # The Latin-1 filename should have been skipped
             filename = filename.decode('latin-1')
             filename not in cmd.filelist.files
+
+    _EXAMPLE_DIRECTIVES = {
+        "setup.cfg - long_description and version": """
+            [metadata]
+            name = testing
+            version = file: src/VERSION.txt
+            license_files = DOWHATYOUWANT
+            long_description = file: README.rst, USAGE.rst
+            """,
+        "pyproject.toml - static readme/license files and dynamic version": """
+            [project]
+            name = "testing"
+            readme = "USAGE.rst"
+            license = {file = "DOWHATYOUWANT"}
+            dynamic = ["version"]
+            [tool.setuptools.dynamic]
+            version = {file = ["src/VERSION.txt"]}
+            """,
+        "pyproject.toml - directive with str instead of list": """
+            [project]
+            name = "testing"
+            readme = "USAGE.rst"
+            license = {file = "DOWHATYOUWANT"}
+            dynamic = ["version"]
+            [tool.setuptools.dynamic]
+            version = {file = "src/VERSION.txt"}
+            """
+    }
+
+    @pytest.mark.parametrize("config", _EXAMPLE_DIRECTIVES.keys())
+    def test_add_files_referenced_by_config_directives(self, tmp_path, config):
+        config_file, _, _ = config.partition(" - ")
+        config_text = self._EXAMPLE_DIRECTIVES[config]
+        (tmp_path / 'src').mkdir()
+        (tmp_path / 'src/VERSION.txt').write_text("0.42", encoding="utf-8")
+        (tmp_path / 'README.rst').write_text("hello world!", encoding="utf-8")
+        (tmp_path / 'USAGE.rst').write_text("hello world!", encoding="utf-8")
+        (tmp_path / 'DOWHATYOUWANT').write_text("hello world!", encoding="utf-8")
+        (tmp_path / config_file).write_text(config_text, encoding="utf-8")
+
+        dist = Distribution({"packages": []})
+        dist.script_name = 'setup.py'
+        dist.parse_config_files()
+
+        cmd = sdist(dist)
+        cmd.ensure_finalized()
+        with quiet():
+            cmd.run()
+
+        assert (
+            'src/VERSION.txt' in cmd.filelist.files
+            or 'src\\VERSION.txt' in cmd.filelist.files
+        )
+        assert 'USAGE.rst' in cmd.filelist.files
+        assert 'DOWHATYOUWANT' in cmd.filelist.files
+        assert '/' not in cmd.filelist.files
+        assert '\\' not in cmd.filelist.files
 
     def test_pyproject_toml_in_sdist(self, tmpdir):
         """
@@ -456,6 +585,46 @@ class TestSdistTest:
         manifest = cmd.filelist.files
         assert 'pyproject.toml' not in manifest
 
+    def test_build_subcommand_source_files(self, tmpdir):
+        touch(tmpdir / '.myfile~')
+
+        # Sanity check: without custom commands file list should not be affected
+        dist = Distribution({**SETUP_ATTRS, "script_name": "setup.py"})
+        cmd = sdist(dist)
+        cmd.ensure_finalized()
+        with quiet():
+            cmd.run()
+        manifest = cmd.filelist.files
+        assert '.myfile~' not in manifest
+
+        # Test: custom command should be able to augment file list
+        dist = Distribution({**SETUP_ATTRS, "script_name": "setup.py"})
+        build = dist.get_command_obj("build")
+        build.sub_commands = [*build.sub_commands, ("build_custom", None)]
+
+        class build_custom(Command):
+            def initialize_options(self):
+                ...
+
+            def finalize_options(self):
+                ...
+
+            def run(self):
+                ...
+
+            def get_source_files(self):
+                return ['.myfile~']
+
+        dist.cmdclass.update(build_custom=build_custom)
+
+        cmd = sdist(dist)
+        cmd.use_defaults = True
+        cmd.ensure_finalized()
+        with quiet():
+            cmd.run()
+        manifest = cmd.filelist.files
+        assert '.myfile~' in manifest
+
 
 def test_default_revctrl():
     """
@@ -468,7 +637,11 @@ def test_default_revctrl():
     This interface must be maintained until Ubuntu 12.04 is no longer
     supported (by Setuptools).
     """
-    ep_def = 'svn_cvs = setuptools.command.sdist:_default_revctrl'
-    ep = pkg_resources.EntryPoint.parse(ep_def)
-    res = ep.resolve()
+    (ep,) = metadata.EntryPoints._from_text(
+        """
+        [setuptools.file_finders]
+        svn_cvs = setuptools.command.sdist:_default_revctrl
+        """
+    )
+    res = ep.load()
     assert hasattr(res, '__iter__')
