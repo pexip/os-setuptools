@@ -1,3 +1,10 @@
+setuptools (66.1.1-1pexip1) pexip; urgency=medium
+
+  * New upstream release
+  * Still don't build docs
+
+ -- Huw Jones <huw@pexip.com>  Tue, 14 Mar 2023 16:11:44 +0000
+
 setuptools (66.1.1-1) unstable; urgency=medium
 
   * New upstream version.
