@@ -10,8 +10,13 @@ eggs, support for merging packages that have separately-distributed modules or
 subpackages, and APIs for managing Python's current "working set" of active
 packages.
 
-
-.. contents:: **Table of Contents**
+.. attention::
+   Use of ``pkg_resources`` is discouraged in favor of
+   `importlib.resources <https://docs.python.org/3/library/importlib.html#module-importlib.resources>`_,
+   `importlib.metadata <https://docs.python.org/3/library/importlib.metadata.html>`_,
+   and their backports (:pypi:`importlib_resources`,
+   :pypi:`importlib_metadata`).
+   Please consider using those libraries instead of pkg_resources.
 
 
 --------
@@ -1147,7 +1152,7 @@ paths.
     will be read as-is.
 
 ``resource_string(package_or_requirement, resource_name)``
-    Return the specified resource as a string.  The resource is read in
+    Return the specified resource as ``bytes``.  The resource is read in
     binary fashion, such that the returned string contains exactly the bytes
     that are stored in the resource.
 
@@ -1222,7 +1227,7 @@ Resource Extraction
 
 If you are implementing an ``IResourceProvider`` and/or ``IMetadataProvider``
 for a new distribution archive format, you may need to use the following
-``IResourceManager`` methods to co-ordinate extraction of resources to the
+``IResourceManager`` methods to coordinate extraction of resources to the
 filesystem.  If you're not implementing an archive format, however, you have
 no need to use these methods.  Unlike the other methods listed above, they are
 *not* available as top-level functions tied to the global ``ResourceManager``;

@@ -21,8 +21,7 @@ recorded in the Git history rather than a changelog.
 Alright! So how to add a news fragment?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``setuptools`` uses `towncrier <https://pypi.org/project/towncrier/>`_
-for changelog management.
+``setuptools`` uses :pypi:`towncrier` for changelog management.
 To submit a change note about your PR, add a text file into the
 ``changelog.d/`` folder. It should contain an
 explanation of what applying this PR will change in the way
@@ -76,7 +75,7 @@ File :file:`changelog.d/1354.misc.rst`:
 
 .. code-block:: rst
 
-    Added ``towncrier`` for changelog managment -- by :user:`pganssle`
+    Added ``towncrier`` for changelog management -- by :user:`pganssle`
 
 File :file:`changelog.d/2355.change.rst`:
 
@@ -91,4 +90,4 @@ File :file:`changelog.d/2355.change.rst`:
    (``tool.towncrier.type``).
 
 .. _Towncrier philosophy:
-   https://towncrier.readthedocs.io/en/actual-freaking-docs/#philosophy
+   https://towncrier.readthedocs.io/en/latest/#philosophy

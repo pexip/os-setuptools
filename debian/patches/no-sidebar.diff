@@ -1,5 +1,5 @@
 --- /dev/null
-+++ setuptools-51.1.0/docs/Makefile
++++ b/docs/Makefile
 @@ -0,0 +1,75 @@
 +# Makefile for Sphinx documentation
 +#
@@ -76,11 +76,3 @@
 +	@echo
 +	@echo "Link check complete; look for any errors in the above output " \
 +	      "or in build/linkcheck/output.txt."
---- setuptools-51.1.0.orig/docs/conf.py
-+++ setuptools-51.1.0/docs/conf.py
-@@ -109,4 +109,4 @@ default_role = 'any'
- # Custom sidebar templates, maps document names to template names.
- html_theme = 'alabaster'
- templates_path = ['_templates']
--html_sidebars = {'index': ['tidelift-sidebar.html']}
-+#html_sidebars = {'index': ['tidelift-sidebar.html']}

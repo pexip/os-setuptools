@@ -1,6 +1,6 @@
 --- a/setuptools/command/egg_info.py
 +++ b/setuptools/command/egg_info.py
-@@ -647,7 +647,7 @@ def _write_requirements(stream, reqs):
+@@ -654,7 +654,7 @@ def _write_requirements(stream, reqs):
  
      def append_cr(line):
          return line + '\n'
