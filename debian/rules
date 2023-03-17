@@ -6,12 +6,12 @@
 override_dh_auto_test:
 
 override_dh_auto_install:
-	export SETUPTOOLS_USE_DISTUTILS=stdlib && dh_auto_install
+	dh_auto_install
 
 # 	PYTHONPATH=$(CURDIR) $(MAKE) -C docs html
 
 	mkdir -p debian/python3-setuptools-whl/usr/share/python-wheels
-	export SETUPTOOLS_USE_DISTUTILS=stdlib && python3 setup.py bdist_wheel \
+	python3 setup.py bdist_wheel \
 	        -d debian/python3-setuptools-whl/usr/share/python-wheels
 
 	# dh_pypy from dh-python < 1.20150705-1 falls over requires.txt
