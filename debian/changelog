@@ -1,3 +1,9 @@
+setuptools (66.1.1-1+pexip24u6) pexip-bookworm; urgency=medium
+
+  * New versioning scheme
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Thu, 01 Feb 2024 16:35:28 +0000
+
 setuptools (66.1.1-1pexip5) pexip-bookworm; urgency=medium
 
   * Bookworm build for product distribution
