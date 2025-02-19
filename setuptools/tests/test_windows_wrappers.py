@@ -12,15 +12,16 @@ the script they are to wrap and with the same name as the script they
 are to wrap.
 """
 
-import sys
+import pathlib
 import platform
-import textwrap
 import subprocess
+import sys
+import textwrap
 
 import pytest
 
-from setuptools.command.easy_install import nt_quote_arg
 import pkg_resources
+from setuptools.command.easy_install import nt_quote_arg
 
 pytestmark = pytest.mark.skipif(sys.platform != 'win32', reason="Windows only")
 
@@ -53,12 +54,12 @@ class WrapperTester:
 
 
 def win_launcher_exe(prefix):
-    """ A simple routine to select launcher script based on platform."""
+    """A simple routine to select launcher script based on platform."""
     assert prefix in ('cli', 'gui')
     if platform.machine() == "ARM64":
-        return "{}-arm64.exe".format(prefix)
+        return f"{prefix}-arm64.exe"
     else:
-        return "{}-32.exe".format(prefix)
+        return f"{prefix}-32.exe"
 
 
 class TestCLI(WrapperTester):
@@ -66,7 +67,8 @@ class TestCLI(WrapperTester):
     wrapper_name = 'foo.exe'
     wrapper_source = win_launcher_exe('cli')
 
-    script_tmpl = textwrap.dedent("""
+    script_tmpl = textwrap.dedent(
+        """
         #!%(python_exe)s
         import sys
         input = repr(sys.stdin.read())
@@ -75,7 +77,8 @@ class TestCLI(WrapperTester):
         print(input)
         if __debug__:
             print('non-optimized')
-        """).lstrip()
+        """
+    ).lstrip()
 
     def test_basic(self, tmpdir):
         """
@@ -107,15 +110,59 @@ class TestCLI(WrapperTester):
             'arg5 a\\\\b',
         ]
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE, text=True)
-        stdout, stderr = proc.communicate('hello\nworld\n')
+            cmd,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        stdout, _stderr = proc.communicate('hello\nworld\n')
         actual = stdout.replace('\r\n', '\n')
-        expected = textwrap.dedent(r"""
+        expected = textwrap.dedent(
+            r"""
             \foo-script.py
             ['arg1', 'arg 2', 'arg "2\\"', 'arg 4\\', 'arg5 a\\\\b']
             'hello\nworld\n'
             non-optimized
-            """).lstrip()
+            """
+        ).lstrip()
+        assert actual == expected
+
+    def test_symlink(self, tmpdir):
+        """
+        Ensure that symlink for the foo.exe is working correctly.
+        """
+        script_dir = tmpdir / "script_dir"
+        script_dir.mkdir()
+        self.create_script(script_dir)
+        symlink = pathlib.Path(tmpdir / "foo.exe")
+        symlink.symlink_to(script_dir / "foo.exe")
+
+        cmd = [
+            str(tmpdir / 'foo.exe'),
+            'arg1',
+            'arg 2',
+            'arg "2\\"',
+            'arg 4\\',
+            'arg5 a\\\\b',
+        ]
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        stdout, _stderr = proc.communicate('hello\nworld\n')
+        actual = stdout.replace('\r\n', '\n')
+        expected = textwrap.dedent(
+            r"""
+            \foo-script.py
+            ['arg1', 'arg 2', 'arg "2\\"', 'arg 4\\', 'arg5 a\\\\b']
+            'hello\nworld\n'
+            non-optimized
+            """
+        ).lstrip()
         assert actual == expected
 
     def test_with_options(self, tmpdir):
@@ -130,7 +177,8 @@ class TestCLI(WrapperTester):
         enter the interpreter after running the script, you could use -Oi:
         """
         self.create_script(tmpdir)
-        tmpl = textwrap.dedent("""
+        tmpl = textwrap.dedent(
+            """
             #!%(python_exe)s  -Oi
             import sys
             input = repr(sys.stdin.read())
@@ -140,7 +188,8 @@ class TestCLI(WrapperTester):
             if __debug__:
                 print('non-optimized')
             sys.ps1 = '---'
-            """).lstrip()
+            """
+        ).lstrip()
         with (tmpdir / 'foo-script.py').open('w') as f:
             f.write(self.prep_script(tmpl))
         cmd = [str(tmpdir / 'foo.exe')]
@@ -150,15 +199,18 @@ class TestCLI(WrapperTester):
             stdin=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
         )
-        stdout, stderr = proc.communicate()
+        stdout, _stderr = proc.communicate()
         actual = stdout.replace('\r\n', '\n')
-        expected = textwrap.dedent(r"""
+        expected = textwrap.dedent(
+            r"""
             \foo-script.py
             []
             ''
             ---
-            """).lstrip()
+            """
+        ).lstrip()
         assert actual == expected
 
 
@@ -167,17 +219,20 @@ class TestGUI(WrapperTester):
     Testing the GUI Version
     -----------------------
     """
+
     script_name = 'bar-script.pyw'
     wrapper_source = win_launcher_exe('gui')
     wrapper_name = 'bar.exe'
 
-    script_tmpl = textwrap.dedent("""
+    script_tmpl = textwrap.dedent(
+        """
         #!%(python_exe)s
         import sys
         f = open(sys.argv[1], 'wb')
         bytes_written = f.write(repr(sys.argv[2]).encode('utf-8'))
         f.close()
-        """).strip()
+        """
+    ).strip()
 
     def test_basic(self, tmpdir):
         """Test the GUI version with the simple script, bar-script.py"""
@@ -189,8 +244,13 @@ class TestGUI(WrapperTester):
             'Test Argument',
         ]
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True)
+            cmd,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+        )
         stdout, stderr = proc.communicate()
         assert not stdout
         assert not stderr

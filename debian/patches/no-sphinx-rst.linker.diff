@@ -1,6 +1,6 @@
 --- a/docs/conf.py
 +++ b/docs/conf.py
-@@ -5,12 +5,13 @@ extensions = [
+@@ -2,12 +2,13 @@ extensions = [
      'sphinx.ext.autodoc',
      'jaraco.packaging.sphinx',
  ]
@@ -13,5 +13,5 @@
 -extensions += ['rst.linker']
 +#extensions += ['rst.linker']
  link_files = {
-     '../CHANGES.rst': dict(
+     '../NEWS.rst': dict(
          using=dict(

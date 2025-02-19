@@ -1,17 +1,18 @@
 """Tests for distutils.unixccompiler."""
+
 import os
 import sys
 import unittest.mock as mock
-
-from .py38compat import EnvironmentVarGuard
-
 from distutils import sysconfig
+from distutils.compat import consolidate_linker_args
 from distutils.errors import DistutilsPlatformError
 from distutils.unixccompiler import UnixCCompiler
 from distutils.util import _clear_cached_macosx_ver
 
-from . import support
 import pytest
+
+from . import support
+from .compat.py39 import EnvironmentVarGuard
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +32,7 @@ def compiler_wrapper(request):
 
 
 class TestUnixCCompiler(support.TempdirManager):
-    @pytest.mark.skipif('platform.system == "Windows"')  # noqa: C901
+    @pytest.mark.skipif('platform.system == "Windows"')
     def test_runtime_libdir_option(self):  # noqa: C901
         # Issue #5900; GitHub Issue #37
         #
@@ -72,10 +73,7 @@ class TestUnixCCompiler(support.TempdirManager):
 
         def do_darwin_test(syscfg_macosx_ver, env_macosx_ver, expected_flag):
             env = os.environ
-            msg = "macOS version = (sysconfig={!r}, env={!r})".format(
-                syscfg_macosx_ver,
-                env_macosx_ver,
-            )
+            msg = f"macOS version = (sysconfig={syscfg_macosx_ver!r}, env={env_macosx_ver!r})"
 
             # Save
             old_gcv = sysconfig.get_config_var
@@ -152,7 +150,10 @@ class TestUnixCCompiler(support.TempdirManager):
                 return 'yes'
 
         sysconfig.get_config_var = gcv
-        assert self.cc.rpath_foo() == '-Wl,--enable-new-dtags,-R/foo'
+        assert self.cc.rpath_foo() == consolidate_linker_args([
+            '-Wl,--enable-new-dtags',
+            '-Wl,-rpath,/foo',
+        ])
 
         def gcv(v):
             if v == 'CC':
@@ -161,7 +162,10 @@ class TestUnixCCompiler(support.TempdirManager):
                 return 'yes'
 
         sysconfig.get_config_var = gcv
-        assert self.cc.rpath_foo() == '-Wl,--enable-new-dtags,-R/foo'
+        assert self.cc.rpath_foo() == consolidate_linker_args([
+            '-Wl,--enable-new-dtags',
+            '-Wl,-rpath,/foo',
+        ])
 
         # GCC non-GNULD
         sys.platform = 'bar'
@@ -186,7 +190,10 @@ class TestUnixCCompiler(support.TempdirManager):
                 return 'yes'
 
         sysconfig.get_config_var = gcv
-        assert self.cc.rpath_foo() == '-Wl,--enable-new-dtags,-R/foo'
+        assert self.cc.rpath_foo() == consolidate_linker_args([
+            '-Wl,--enable-new-dtags',
+            '-Wl,-rpath,/foo',
+        ])
 
         # non-GCC GNULD
         sys.platform = 'bar'
@@ -198,7 +205,10 @@ class TestUnixCCompiler(support.TempdirManager):
                 return 'yes'
 
         sysconfig.get_config_var = gcv
-        assert self.cc.rpath_foo() == '-Wl,--enable-new-dtags,-R/foo'
+        assert self.cc.rpath_foo() == consolidate_linker_args([
+            '-Wl,--enable-new-dtags',
+            '-Wl,-rpath,/foo',
+        ])
 
         # non-GCC non-GNULD
         sys.platform = 'bar'
@@ -235,6 +245,7 @@ class TestUnixCCompiler(support.TempdirManager):
         assert self.cc.linker_so[0] == 'my_cc'
 
     @pytest.mark.skipif('platform.system == "Windows"')
+    @pytest.mark.usefixtures('disable_macos_customization')
     def test_cc_overrides_ldshared_for_cxx_correctly(self):
         """
         Ensure that setting CC env variable also changes default linker
@@ -246,9 +257,13 @@ class TestUnixCCompiler(support.TempdirManager):
         def gcv(v):
             if v == 'LDSHARED':
                 return 'gcc-4.2 -bundle -undefined dynamic_lookup '
+            elif v == 'LDCXXSHARED':
+                return 'g++-4.2 -bundle -undefined dynamic_lookup '
             elif v == 'CXX':
                 return 'g++-4.2'
-            return 'gcc-4.2'
+            elif v == 'CC':
+                return 'gcc-4.2'
+            return ''
 
         def gcvs(*args, _orig=sysconfig.get_config_vars):
             if args:
@@ -257,13 +272,12 @@ class TestUnixCCompiler(support.TempdirManager):
 
         sysconfig.get_config_var = gcv
         sysconfig.get_config_vars = gcvs
-        with mock.patch.object(
-            self.cc, 'spawn', return_value=None
-        ) as mock_spawn, mock.patch.object(
-            self.cc, '_need_link', return_value=True
-        ), mock.patch.object(
-            self.cc, 'mkpath', return_value=None
-        ), EnvironmentVarGuard() as env:
+        with (
+            mock.patch.object(self.cc, 'spawn', return_value=None) as mock_spawn,
+            mock.patch.object(self.cc, '_need_link', return_value=True),
+            mock.patch.object(self.cc, 'mkpath', return_value=None),
+            EnvironmentVarGuard() as env,
+        ):
             env['CC'] = 'ccache my_cc'
             env['CXX'] = 'my_cxx'
             del env['LDSHARED']
@@ -303,4 +317,34 @@ class TestUnixCCompiler(support.TempdirManager):
         # FileNotFoundError: [Errno 2] No such file or directory: 'a.out'
         self.cc.output_dir = 'scratch'
         os.chdir(self.mkdtemp())
-        self.cc.has_function('abort', includes=['stdlib.h'])
+        self.cc.has_function('abort')
+
+    def test_find_library_file(self, monkeypatch):
+        compiler = UnixCCompiler()
+        compiler._library_root = lambda dir: dir
+        monkeypatch.setattr(os.path, 'exists', lambda d: 'existing' in d)
+
+        libname = 'libabc.dylib' if sys.platform != 'cygwin' else 'cygabc.dll'
+        dirs = ('/foo/bar/missing', '/foo/bar/existing')
+        assert (
+            compiler.find_library_file(dirs, 'abc').replace('\\', '/')
+            == f'/foo/bar/existing/{libname}'
+        )
+        assert (
+            compiler.find_library_file(reversed(dirs), 'abc').replace('\\', '/')
+            == f'/foo/bar/existing/{libname}'
+        )
+
+        monkeypatch.setattr(
+            os.path,
+            'exists',
+            lambda d: 'existing' in d and '.a' in d and '.dll.a' not in d,
+        )
+        assert (
+            compiler.find_library_file(dirs, 'abc').replace('\\', '/')
+            == '/foo/bar/existing/libabc.a'
+        )
+        assert (
+            compiler.find_library_file(reversed(dirs), 'abc').replace('\\', '/')
+            == '/foo/bar/existing/libabc.a'
+        )

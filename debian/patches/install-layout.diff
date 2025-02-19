@@ -1,24 +1,24 @@
 --- a/setuptools/command/easy_install.py
 +++ b/setuptools/command/easy_install.py
-@@ -126,6 +126,8 @@ class easy_install(Command):
-         ('local-snapshots-ok', 'l',
-          "allow building eggs from local checkouts"),
+@@ -143,6 +143,8 @@ class easy_install(Command):
+         ('allow-hosts=', 'H', "pattern(s) that hostnames must match"),
+         ('local-snapshots-ok', 'l', "allow building eggs from local checkouts"),
          ('version', None, "print version information and exit"),
 +        ('install-layout=', None, "installation layout to choose (known values: deb)"),
 +        ('force-installation-into-system-dir', '0', "force installation into /usr"),
-         ('no-find-links', None,
-          "Don't load find-links defined in packages being installed"),
-         ('user', None, "install in user site-package '%s'" % site.USER_SITE)
-@@ -133,7 +135,7 @@ class easy_install(Command):
-     boolean_options = [
-         'zip-ok', 'multi-version', 'exclude-scripts', 'upgrade', 'always-copy',
+         (
+             'no-find-links',
+             None,
+@@ -157,7 +159,7 @@ class easy_install(Command):
+         'upgrade',
+         'always-copy',
          'editable',
--        'no-deps', 'local-snapshots-ok', 'version',
-+        'no-deps', 'local-snapshots-ok', 'version', 'force-installation-into-system-dir'
-         'user'
-     ]
- 
-@@ -178,6 +180,10 @@ class easy_install(Command):
+-        'no-deps',
++        'no-deps', 'local-snapshots-ok', 'force-installation-into-system-dir'
+         'local-snapshots-ok',
+         'version',
+         'user',
+@@ -200,6 +202,10 @@ class easy_install(Command):
          self.pth_file = self.always_copy_from = None
          self.site_dirs = None
          self.installed_projects = {}
@@ -29,7 +29,7 @@
          # Always read easy_install options, even if we are subclassed, or have
          # an independent instance created.  This ensures that defaults will
          # always come from the standard configuration file(s)' "easy_install"
-@@ -259,6 +265,11 @@ class easy_install(Command):
+@@ -282,6 +288,11 @@ class easy_install(Command):
          self.expand_basedirs()
          self.expand_dirs()
  
@@ -39,9 +39,9 @@
 +            self.install_layout = self.install_layout.lower()
 +
          self._expand(
-             'install_dir', 'script_dir', 'build_directory',
-             'site_dirs',
-@@ -285,6 +296,15 @@ class easy_install(Command):
+             'install_dir',
+             'script_dir',
+@@ -306,6 +317,15 @@ class easy_install(Command):
          if self.user and self.install_purelib:
              self.install_dir = self.install_purelib
              self.script_dir = self.install_scripts
@@ -57,8 +57,8 @@
          # default --record from the install command
          self.set_undefined_options('install', ('record', 'record'))
          self.all_site_dirs = get_site_dirs()
-@@ -1334,11 +1354,28 @@ class easy_install(Command):
-                 self.debug_print("os.makedirs('%s', 0o700)" % path)
+@@ -1377,11 +1397,28 @@ class easy_install(Command):
+                 self.debug_print(f"os.makedirs('{path}', 0o700)")
                  os.makedirs(path, 0o700)
  
 +    if sys.version[:3] in ('2.3', '2.4', '2.5') or 'real_prefix' in sys.__dict__:
@@ -86,7 +86,7 @@
      )
  
      DEFAULT_SCHEME = dict(
-@@ -1349,11 +1386,18 @@ class easy_install(Command):
+@@ -1392,11 +1429,18 @@ class easy_install(Command):
      def _expand(self, *attrs):
          config_vars = self.get_finalized_command('install').config_vars
  
@@ -107,18 +107,18 @@
              for attr, val in scheme.items():
                  if getattr(self, attr, None) is None:
                      setattr(self, attr, val)
-@@ -1397,9 +1441,15 @@ def get_site_dirs():
+@@ -1440,9 +1484,15 @@ def get_site_dirs():
              sitedirs.extend([
                  os.path.join(
                      prefix,
 +                    "local/lib",
-+                    "python" + sys.version[:3],
++                    f"python{sys.version_info.major}.{sys.version_info.minor}",
 +                    "dist-packages",
 +                ),
 +                os.path.join(
 +                    prefix,
                      "lib",
-                     "python{}.{}".format(*sys.version_info),
+                     f"python{sys.version_info.major}.{sys.version_info.minor}",
 -                    "site-packages",
 +                    "dist-packages",
                  ),
@@ -126,42 +126,38 @@
              ])
 --- a/setuptools/command/install_egg_info.py
 +++ b/setuptools/command/install_egg_info.py
-@@ -1,5 +1,5 @@
- from distutils import log, dir_util
+@@ -1,4 +1,4 @@
 -import os
 +import os, sys
  
- from setuptools import Command
- from setuptools import namespaces
-@@ -19,14 +19,31 @@ class install_egg_info(namespaces.Instal
+ from setuptools import Command, namespaces
+ from setuptools.archive_util import unpack_archive
+@@ -19,11 +19,28 @@ class install_egg_info(namespaces.Instal
  
      def initialize_options(self):
          self.install_dir = None
 +        self.install_layout = None
 +        self.prefix_option = None
  
-     def finalize_options(self):
-         self.set_undefined_options('install_lib',
-                                    ('install_dir', 'install_dir'))
+     def finalize_options(self) -> None:
+         self.set_undefined_options('install_lib', ('install_dir', 'install_dir'))
 +        self.set_undefined_options('install',('install_layout','install_layout'))
 +        if sys.hexversion > 0x2060000:
 +            self.set_undefined_options('install',('prefix_option','prefix_option'))
          ei_cmd = self.get_finalized_command("egg_info")
-         basename = pkg_resources.Distribution(
-             None, None, ei_cmd.egg_name, ei_cmd.egg_version
-         ).egg_name() + '.egg-info'
+         basename = f"{ei_cmd._get_egg_basename()}.egg-info"
 +
 +        if self.install_layout:
 +            if not self.install_layout.lower() in ['deb']:
 +                raise DistutilsOptionError("unknown value for --install-layout")
 +            self.install_layout = self.install_layout.lower()
-+            basename = basename.replace('-py%s' % pkg_resources.PY_MAJOR, '')
++            basename = basename.replace('-py%s' % sys.version[:4], '')
 +        elif self.prefix_option or 'real_prefix' in sys.__dict__:
 +            # don't modify for virtualenv
 +            pass
 +        else:
-+            basename = basename.replace('-py%s' % pkg_resources.PY_MAJOR, '')
++            basename = basename.replace('-py%s' % sys.version[:4], '')
 +
          self.source = ei_cmd.egg_info
          self.target = os.path.join(self.install_dir, basename)
-         self.outputs = []
+         self.outputs: list[str] = []

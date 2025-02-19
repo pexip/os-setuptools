@@ -1,6 +1,6 @@
 --- a/docs/conf.py
 +++ b/docs/conf.py
-@@ -103,7 +103,7 @@ extensions += ['sphinx.ext.extlinks']
+@@ -136,7 +136,7 @@ extensions += ['sphinx.ext.extlinks']
  default_role = 'any'
  
  # HTML theme
