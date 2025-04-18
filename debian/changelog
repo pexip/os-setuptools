@@ -1,3 +1,30 @@
+setuptools (78.1.0-1.2) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Make python3-setuptools break python3-wheel < 0.46.0.
+  * Revert upstream change to use #!python shebang (closes: #1103186).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 18 Apr 2025 14:51:13 +0300
+
+setuptools (78.1.0-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Upload to unstable.
+
+ -- Stefano Rivera <stefanor@debian.org>  Thu, 10 Apr 2025 17:02:12 -0400
+
+setuptools (78.1.0-1) experimental; urgency=medium
+
+  * New upstream version.
+
+ -- Matthias Klose <doko@debian.org>  Sat, 05 Apr 2025 08:35:21 +0200
+
+setuptools (77.0.3-1) experimental; urgency=medium
+
+  * New upstream version. Closes: #1100972.
+
+ -- Matthias Klose <doko@debian.org>  Fri, 21 Mar 2025 11:01:05 +0100
+
 setuptools (75.8.0-1) unstable; urgency=medium
 
   * New upstream version.

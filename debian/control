@@ -49,6 +49,7 @@ Depends:
  ${misc:Depends},
  ${python3:Depends}
 Suggests: python-setuptools-doc
+Breaks: python3-wheel (<< 0.46.0)
 Description: Python3 Distutils Enhancements
  Extensions to the python-distutils for large or complex distributions.
 
