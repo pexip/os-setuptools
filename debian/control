@@ -12,7 +12,7 @@ Build-Depends:
 Build-Conflicts: python-setuptools, python3-setuptools, pypy-setuptools
 Standards-Version: 4.6.2
 Homepage: https://pypi.python.org/pypi/setuptools
-XS-Pexip-Upstream: http://ftp.debian.org/debian/ bookworm
+XS-Pexip-Upstream: http://deb.debian.org/debian/ trixie
 
 Package: python3-pkg-resources
 Architecture: all
