@@ -1,6 +1,6 @@
 --- a/setuptools/dist.py
 +++ b/setuptools/dist.py
-@@ -208,7 +208,7 @@ def write_pkg_file(self, file):  # noqa:
+@@ -226,7 +226,7 @@ def write_pkg_file(self, file):  # noqa:
      if self.long_description_content_type:
          write_field('Description-Content-Type', self.long_description_content_type)
      if self.provides_extras:

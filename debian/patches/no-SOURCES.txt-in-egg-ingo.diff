@@ -1,8 +1,6 @@
-Index: b/setuptools/command/install_egg_info.py
-===================================================================
 --- a/setuptools/command/install_egg_info.py
 +++ b/setuptools/command/install_egg_info.py
-@@ -72,6 +72,9 @@ class install_egg_info(namespaces.Instal
+@@ -68,6 +68,9 @@ class install_egg_info(namespaces.Instal
              for skip in '.svn/', 'CVS/':
                  if src.startswith(skip) or '/' + skip in src:
                      return None

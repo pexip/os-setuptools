@@ -8,9 +8,13 @@ Build-Depends:
  dh-python,
  python3-all,
  python3-alabaster,
+ python3-sphinx,
+ python3-sphinx-favicon,
+ python3-sphinx-reredirects,
+ python3-sphinx-notfound-page,
  python3-wheel
-Build-Conflicts: python-setuptools, python3-setuptools, pypy-setuptools
-Standards-Version: 4.6.2
+#Build-Conflicts: python-setuptools, python3-setuptools, pypy-setuptools
+Standards-Version: 4.7.0
 Homepage: https://pypi.python.org/pypi/setuptools
 XS-Pexip-Upstream: http://deb.debian.org/debian/ trixie
 
@@ -19,6 +23,8 @@ Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends}
 Suggests: python3-setuptools
+Breaks: python3-setuptools (<< 75.2)
+Replaces: python3-setuptools (<< 75.2)
 Description: Package Discovery and Resource Access using pkg_resources
  The pkg_resources module provides an API for Python libraries to
  access their resource files, and for extensible applications and
@@ -33,7 +39,6 @@ Architecture: all
 Multi-Arch: foreign
 Depends:
  python3-pkg-resources (= ${binary:Version}),
- python3-distutils,
  ${misc:Depends},
  ${python3:Depends}
 Description: Python3 Distutils Enhancements
