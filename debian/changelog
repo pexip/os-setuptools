@@ -1,3 +1,9 @@
+setuptools (75.8.0-1+pexip25u1) pexip-trixie; urgency=medium
+
+  * Initial trixie build
+
+ -- Mark Hymers <mark.hymers@pexip.com>  Tue, 29 Apr 2025 22:58:08 +0100
+
 setuptools (75.8.0-1) unstable; urgency=medium
 
   * New upstream version.
