@@ -18,6 +18,15 @@ Standards-Version: 4.7.0
 Homepage: https://pypi.python.org/pypi/setuptools
 XS-Pexip-Upstream: http://deb.debian.org/debian/ trixie
 
+Package: python-setuptools-doc
+Architecture: all
+Multi-Arch: foreign
+Section: doc
+Depends: ${misc:Depends}, ${sphinxdoc:Depends}
+Description: Python Distutils Enhancements (documentation)
+ Extensions to the Python distutils for large or complex distributions.
+ The package contains the documentation in html format.
+
 Package: python3-pkg-resources
 Architecture: all
 Multi-Arch: foreign
