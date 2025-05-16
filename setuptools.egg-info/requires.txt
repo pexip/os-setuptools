@@ -14,9 +14,7 @@ more_itertools>=8.8
 jaraco.text>=3.7
 wheel>=0.43.0
 platformdirs>=4.2.2
-jaraco.collections
 jaraco.functools>=4
-packaging
 more_itertools
 
 [core:python_version < "3.10"]

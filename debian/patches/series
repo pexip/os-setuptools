@@ -13,3 +13,4 @@ no-sphinx-towncrier.diff
 no-sphinx-jaraco-tidelift.diff
 sphinx-theme.diff
 dont-require-vendored-modules.diff
+revert-shebang-change.diff
