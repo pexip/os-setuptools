@@ -1,3 +1,12 @@
+setuptools (78.1.1-0.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Update to upstream 78.1.1 which fixes CVE-2025-47273 (Closes: #1105970)
+    - Path traversal in PackageIndex.download leads to Arbitrary File Write.
+  * debian/watch: Update URI to https.
+
+ -- Lee Garrett <debian@rocketjump.eu>  Tue, 27 May 2025 15:19:40 +0200
+
 setuptools (78.1.0-1.2) unstable; urgency=medium
 
   * Non-maintainer upload.
