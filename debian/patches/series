@@ -15,3 +15,4 @@ sphinx-theme.diff
 no-sphinx-custom-icons.diff
 no-sphinx-hoverxref.diff
 CVE-2024-6345.patch
+CVE-2025-47273.patch

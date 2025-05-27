@@ -1,3 +1,11 @@
+setuptools (66.1.1-1+deb12u2) bookworm; urgency=medium
+
+  * Non-maintainer upload by the Debian LTS team.
+  * Fix CVE-2025-47273:
+    - Path traversal in PackageIndex.download leads to Arbitrary File Write
+
+ -- Lee Garrett <debian@rocketjump.eu>  Tue, 27 May 2025 13:43:25 +0200
+
 setuptools (66.1.1-1+deb12u1) bookworm; urgency=medium
 
   * Non-maintainer upload by the Debian LTS team.
